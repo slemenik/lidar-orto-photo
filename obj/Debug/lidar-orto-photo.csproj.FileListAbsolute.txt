@@ -1,0 +1,16 @@
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\lidar_orto_photo.exe
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\lidar_orto_photo.pdb
+C:\Users\Matej\RiderProjects\lidar-orto-photo\obj\Debug\lidar-orto-photo.csprojResolveAssemblyReference.cache
+C:\Users\Matej\RiderProjects\lidar-orto-photo\obj\Debug\lidar-orto-photo.csproj.CoreCompileInputs.cache
+C:\Users\Matej\RiderProjects\lidar-orto-photo\obj\Debug\lidar_orto_photo.exe
+C:\Users\Matej\RiderProjects\lidar-orto-photo\obj\Debug\lidar_orto_photo.pdb
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\Aardvark.Base.dll
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\DevILSharp.dll
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\FSharp.Core.dll
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\LASzip.dll
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\laszip.net.dll
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\Aardvark.Base.pdb
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\Aardvark.Base.xml
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\DevILSharp.pdb
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\FSharp.Core.xml
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\LASzip.xml

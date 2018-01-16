@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ContentModelStore">
+    <e p="C:\Users\Matej\.Rider2017.2\system\resharper-host\local\Transient\ReSharperHost\v10\SolutionCaches\_lidar-orto-photo.2102056254.00" t="ExcludeRecursive" />
+    <e p="C:\Users\Matej\RiderProjects\lidar-orto-photo" t="IncludeRecursive">
+      <e p="bin" t="ExcludeRecursive" />
+      <e p="lidar-orto-photo.csproj" t="IncludeRecursive" />
+      <e p="lidar-orto-photo.sln" t="IncludeFlat" />
+      <e p="obj" t="ExcludeRecursive" />
+      <e p="packages" t="ExcludeRecursive" />
+      <e p="packages.config" t="Include" />
+      <e p="Program.cs" t="Include" />
+      <e p="Properties" t="Include">
+        <e p="AssemblyInfo.cs" t="Include" />
+      </e>
+      <e p="resources" t="Include" />
+    </e>
+  </component>
+</project>
