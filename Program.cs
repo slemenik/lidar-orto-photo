@@ -11,9 +11,8 @@ namespace lidar_orto_photo
 {
     internal class Program
     {
-	    
-	    public static readonly String RESOURCE_DIRECTORY_PATH = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName + "\\resources\\";
-	    public static readonly String temp_file_name = "GK_470_97.laz";
+	    private static readonly String ResourceDirectoryPath = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName + "\\resources\\";
+	    private static readonly String temp_file_name = "GK_470_97.laz";
 	    
 	    
 	    
@@ -30,46 +29,67 @@ namespace lidar_orto_photo
 			ReadLaz();  // Read it back
 		}
 
-		static string FileName = Path.GetTempPath() + "Test.laz";
+		static string FileName = ResourceDirectoryPath + temp_file_name;
 
 		static void ReadLaz()
 		{
 			var lazReader = new laszip_dll();
+			var lazWriter = new laszip_dll();
+			var err = lazWriter.laszip_clean();
 			var compressed = true;
-			lazReader.laszip_open_reader(FileName, ref compressed);
-			var numberOfPoints = lazReader.header.number_of_point_records;
-
-			// Check some header values
-			Debug.WriteLine(lazReader.header.min_x);
-			Debug.WriteLine(lazReader.header.min_y);
-			Debug.WriteLine(lazReader.header.min_z);
-			Debug.WriteLine(lazReader.header.max_x);
-			Debug.WriteLine(lazReader.header.max_y);
-			Debug.WriteLine(lazReader.header.max_z);
-
-			int classification = 0;
-			var point = new Point3D();
-			var coordArray = new double[3];
-
-			// Loop through number of points indicated
-			for (int pointIndex = 0; pointIndex < numberOfPoints; pointIndex++)
+			if (err == 0)
 			{
-				// Read the point
-				lazReader.laszip_read_point();
-				
-				// Get precision coordinates
-				lazReader.laszip_get_coordinates(coordArray);
-//				lazReader.
-				point.X = coordArray[0];
-				point.Y = coordArray[1];
-				point.Z = coordArray[2];
-				
-				// Get classification value
-				classification = lazReader.point.classification;
+				lazReader.laszip_open_reader(FileName, ref compressed);
+//				var numberOfPoints = (uint)10;
+				var numberOfPoints = lazReader.header.number_of_point_records;
+	
+				// Check some header values
+				Console.WriteLine(lazReader.header.min_x);
+				Console.WriteLine(lazReader.header.min_y);
+				Console.WriteLine(lazReader.header.min_z);
+				Console.WriteLine(lazReader.header.max_x);
+				Console.WriteLine(lazReader.header.max_y);
+				Console.WriteLine(lazReader.header.max_z);
+	
+				int classification = 0;
+//				var coordArray = new double[3];
+	
+				lazWriter.header.number_of_point_records = numberOfPoints;
+
+				// Header Min/Max needs to be set to extents of points
+				lazWriter.header = lazReader.header; // LL Point
+
+				// Open the writer and test for errors
+				err = lazWriter.laszip_open_writer(ResourceDirectoryPath +"temp.laz", true);
+				if (err == 0)
+				{
+					double[] coordArray = new double[3];
+					for (int pointIndex = 0; pointIndex < numberOfPoints; pointIndex++)
+					{
+						lazReader.laszip_read_point();
+
+						// Get precision coordinates
+//						lazReader.laszip_get_coordinates(coordArray);			
+//						lazWriter.laszip_set_coordinates(coordArray);
+
+						lazWriter.point = lazReader.point;
+						
+						
+//						
+						err = lazWriter.laszip_write_point();
+						if (err != 0) break;
+						
+					}
+				}
+				// Close the reader
+				lazReader.laszip_close_reader();
 			}
 
-			// Close the reader
-			lazReader.laszip_close_reader();
+			if (err != 0)
+			{
+				// Show last error that occurred
+				Debug.WriteLine(lazWriter.laszip_get_error());
+			}
 		}
 
 		private static void WriteLaz()
@@ -120,7 +140,7 @@ namespace lidar_orto_photo
 
 						// Set the classification to ground
 						lazWriter.point.classification = 2;
-
+						
 //						new laszip_point().
 						// Write the point to the file
 						err = lazWriter.laszip_write_point();
@@ -144,8 +164,8 @@ namespace lidar_orto_photo
 	    private static void runLasViewer()
 	    {
 		    ProcessStartInfo start = new ProcessStartInfo();
-		    start.Arguments = "-i \"" + RESOURCE_DIRECTORY_PATH + temp_file_name + "\""; 
-		    start.FileName = RESOURCE_DIRECTORY_PATH + "lasview";
+		    start.Arguments = "-i \"" + ResourceDirectoryPath + "temp.laz" + "\""; 
+		    start.FileName = ResourceDirectoryPath + "lasview";
 		    start.WindowStyle = ProcessWindowStyle.Normal;
 		    start.CreateNoWindow = false;
 			Process.Start(start);
@@ -156,8 +176,9 @@ namespace lidar_orto_photo
         {
 	        Console.WriteLine("start");
             
-            Console.WriteLine(RESOURCE_DIRECTORY_PATH);
 //	        runLasViewer();
+	        ReadLaz();
+	        runLasViewer();
 	        
 	        
 	        Console.WriteLine("end");
@@ -166,8 +187,7 @@ namespace lidar_orto_photo
 	    public static void test()
 	    {
 		    var totalPointCount = 0L;
-		    var filename = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName + "\\resources\\GK_470_97.laz";
-//            var filename = "C:\\Users\\Matej\\IdeaProjects\\nrg-seminar\\src\\GK_470_97.laz";
+		    var filename = ResourceDirectoryPath + temp_file_name;
 		    File.OpenRead(filename);
 		    var info = LASZip.Parser.ReadInfo(filename);
 		    totalPointCount += info.Count;
