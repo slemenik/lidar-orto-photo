@@ -19,7 +19,7 @@ namespace lidar_orto_photo
         
 	    private static readonly string ARSO_LIDAR_URL = "http://gis.arso.gov.si/lidar/gkot/laz/b_35/D48GK/GK_470_97.laz";
 	    private static readonly string ARSO_ORTOPHOTO_URL = "http://gis.arso.gov.si/arcgis/rest/services/DOF_2016/MapServer/export";
-	    private static readonly int ORTO_PHOTO_IMG_SIZE = 1000;//TODO - change so it works with different sizes
+	    private static readonly int ORTO_PHOTO_IMG_SIZE = 2000;//TODO - change so it works with different sizes
 
 	    private static int bottomLeftX;
 	    private static int bottomLeftY;
@@ -83,14 +83,16 @@ namespace lidar_orto_photo
 
 						lazWriter.point = lazReader.point;
 						int[] pxCoordinates = findClosestPxCoordinates(coordArray[0], coordArray[1]);
-						int i = 				pxCoordinates[0]-bottomLeftX;
-						int j = img.Height-1-(	pxCoordinates[1]-bottomLeftY);//j index of image goes from top to bottom
+						int i = (pxCoordinates[0]-bottomLeftX)*2;
+						int j = img.Height-1-((pxCoordinates[1]-bottomLeftY)*2);//j index of image goes from top to bottom
 						
 //						var rnd = new Random();				
 //						var r = rnd.Next(0, 255);
 //						var g = rnd.Next(0, 255);
 //						var b = rnd.Next(0, 255);
 //						
+//						Console.WriteLine(pxCoordinates[0]);
+//						Console.WriteLine(i);
 						Color color = img.GetPixel(i,j); //binary int value
 //						Color color = new Color(rgb);
 //						Console.WriteLine("{0},{1},{2}", color.R, color.G, color.B);
@@ -175,7 +177,7 @@ namespace lidar_orto_photo
 			    CreateNoWindow = false
 		    };
 
-		    var process = Process.Start(start);
+		    Process.Start(start);
 		    Console.WriteLine("[DONE]");
 	    }
 
@@ -190,11 +192,6 @@ namespace lidar_orto_photo
 			    CreateNoWindow = false
 		    };
 		    var process = Process.Start(start);
-		    
-//		    var process = Process.Start(ResourceDirectoryPath+"las2las", 
-//			    "-i \"" + ResourceDirectoryPath+ temp_file_name
-//			    +"\" -set_point_type 5 -set_version 1.3 -odir \""
-//			    +ResourceDirectoryPath.Substring(0,ResourceDirectoryPath.Length-1) + "\" -o \"plis.laz\"");
 		    process.WaitForExit();
 		    Console.WriteLine("[DONE]");
 	    }
@@ -203,14 +200,15 @@ namespace lidar_orto_photo
         {
 	        Console.WriteLine("[{0:h:mm:ss}] Start program. ", DateTime.Now);
 	        var fileName = "GK_470_97";
-	        var imageName = "export.png";
+	        var imageName = "export2.png";
+
+	        
 	        
 	        setParameters(fileName);
-//	        runLas2las(fileName + ".laz");
+////	        runLas2las(fileName + ".laz");
 	        ReadLaz(fileName + "_1.laz", imageName);
-	        runLasview(fileName + "_1_new.laz");
+//	        runLasview(fileName + "_1_new.laz");
 //	        var a = isPointOutOfBounds(new Point(470000.0, 97000.0), 470000, 97000);
-//	        setParameters(fileName);
 //	        Console.WriteLine(bottomLeftX);
 //	        Console.WriteLine(bottomLeftY);
 //	        Button1_Click(imageName);
@@ -220,12 +218,16 @@ namespace lidar_orto_photo
 	    
 	    private static int[] findClosestPxCoordinates(double x, double y){
 
+		    var decimalPartX = x - Math.Floor(x);
+		    var decimalPartY = y - Math.Floor(y);
+		    x = decimalPartX >= 0 && decimalPartX < 0.5 ? (int) x : (int) x + 0.5; //0.0...0.49 -> 0.0	    
+		    y = decimalPartY >= 0 && decimalPartY < 0.5 ? (int) y : (int) y + 0.5; //0.5...0.99 -> 0.5
+		    
 		    var p = new Point(x, y);
-		    var upperLeft = new Point((int)x,(int)y+1);
-		    var upperRight = new Point((int)x+1,(int)y+1);
+		    var upperLeft = new Point((int)x,(int)y+0.5);
+		    var upperRight = new Point((int)x+0.5,(int)y+0.5);
 		    var bottomLeft = new Point((int)x,(int)y);
-		    var bottomRight = new Point((int)x+1,(int)y);
-
+		    var bottomRight = new Point((int)x+0.5,(int)y);
 
 		    //leftBottom is never out of bounds
 		    var closestPoint = bottomLeft;
@@ -241,6 +243,7 @@ namespace lidar_orto_photo
 				    closestPoint = currPoint;
 				    minDistance = currDistance;
 			    }
+			    
 		    }
 		    return new []{(int)closestPoint.X, (int)closestPoint.Y};
 	    }
