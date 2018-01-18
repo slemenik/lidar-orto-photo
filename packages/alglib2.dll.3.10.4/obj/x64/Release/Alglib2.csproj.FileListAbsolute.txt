@@ -1,0 +1,5 @@
+C:\Users\szekely_d\Documents\Visual Studio 2015\Projects\Alglib2\Alglib2\bin\x64\Release\Alglib2.dll
+C:\Users\szekely_d\Documents\Visual Studio 2015\Projects\Alglib2\Alglib2\bin\x64\Release\Alglib2.pdb
+C:\Users\szekely_d\Documents\Visual Studio 2015\Projects\Alglib2\Alglib2\obj\x64\Release\Alglib2.csprojResolveAssemblyReference.cache
+C:\Users\szekely_d\Documents\Visual Studio 2015\Projects\Alglib2\Alglib2\obj\x64\Release\Alglib2.dll
+C:\Users\szekely_d\Documents\Visual Studio 2015\Projects\Alglib2\Alglib2\obj\x64\Release\Alglib2.pdb
