@@ -27,12 +27,15 @@ namespace lidar_orto_photo
 //	    private static readonly string ArsoLidarUrl = "http://gis.arso.gov.si/lidar/gkot/laz/b_35/D48GK/GK_470_97.laz";
 //	    private static readonly string ArsoLidarUrl = "http://gis.arso.gov.si/lidar/gkot/laz/b_35/D48GK/GK_462_104.laz";
 
-	    private static readonly object SlovenianMapBounds = new {MinX = 374,MinY = 30,MaxX = 624,MaxY = 194}; //minx,miny,maxx,maxy in thousand
+	    private static readonly int[] SlovenianMapBounds = {374,  30,  624,  194}; //minx,miny,maxx,maxy in thousand
 
+//	    public  object sa = SlovenianMapBounds.MinX;
 	    private const int OrtoPhotoImgSize = 2000;
 
 	    private static int _bottomLeftX;
 	    private static int _bottomLeftY;
+
+	    private static laszip_dll lazWriter;
 
 	    private static void SetParameters(string fileName)
 	    {
@@ -47,7 +50,7 @@ namespace lidar_orto_photo
 	    private static void ReadWriteLaz(string fileName)
 		{
 			var lazReader = new laszip_dll();
-			var lazWriter = new laszip_dll();
+			
 			var compressed = true;
 			
 			var filePath = ResourceDirectoryPath + fileName;
@@ -60,14 +63,13 @@ namespace lidar_orto_photo
 			var img = GetOrthophotoImg();
 //				var img = new Bitmap(ResourceDirectoryPath + imageName, true);
 
-			lazWriter.header.number_of_point_records = numberOfPoints;
+			lazReader.header.number_of_point_records = numberOfPoints;
 //			Console.WriteLine(numberOfPoints);
-			lazWriter.header = lazReader.header;
-
+			
 			var pointsCoordArr = new double[numberOfPoints,3];
 			KDTree kdTree = new KDTree(3);
-			var newFileName = Path.GetFileNameWithoutExtension(fileName) + "_new.laz";
-			lazWriter.laszip_open_writer(ResourceDirectoryPath + newFileName, true);
+			
+			
 			
 			Console.Write("[{0:hh:mm:ss}] Reading LAZ ...", DateTime.Now);
 			for (var pointIndex = 0; pointIndex < numberOfPoints; pointIndex++)
@@ -87,6 +89,16 @@ namespace lidar_orto_photo
 //			HashSet<int> set = new HashSet<int>();
 			lazReader.laszip_seek_point(0L);//read from the beginning
 			lazReader.laszip_open_reader(filePath, ref compressed);
+
+			if (lazWriter == null)
+			{
+				lazWriter = new laszip_dll();
+				lazWriter.header = lazReader.header;
+//				var newFileName = Path.GetFileNameWithoutExtension(fileName) + "_new.laz";
+				lazWriter.laszip_open_writer(ResourceDirectoryPath + "SloveniaLidarRGB.laz", true);
+			}
+			 
+			
 			for (int pointIndex = 0; pointIndex < numberOfPoints; pointIndex = pointIndex + 1)
 			{
 				
@@ -107,7 +119,7 @@ namespace lidar_orto_photo
 				};
 
 
-				var nearest = kdTree.ApproximateNearest(coordArray, 10, kdTree.Count);
+//				var nearest = kdTree.ApproximateNearest(coordArray, 10, kdTree.Count);
 //				if (nearest.Count > 1)
 //				{
 ////					Console.WriteLine(nearest[0].Node.Position[0]);
@@ -201,8 +213,24 @@ namespace lidar_orto_photo
         public static void Main()
         {
 	        Console.WriteLine("[{0:hh:mm:ss}] Start program. ", DateTime.Now);
+	        
+	        Console.WriteLine("[{0:hh:mm:ss}] Searching for valid ARSO Urls...", DateTime.Now);
 
-//	        for(int x = SlovenianMapBounds[]; )
+	        var addedBlocs = 0;
+	        for (var x = SlovenianMapBounds[0]; x <= SlovenianMapBounds[2]; x++)
+	        {
+		        for (var y = SlovenianMapBounds[1]; y <= SlovenianMapBounds[3]; y++)
+		        {
+			        var url = getArsoUrl(x + "_" + y);
+			        if (url != null)
+			        {
+				        Console.WriteLine("[{0:hh:mm:ss}] Found URL: {1}", DateTime.Now, url);
+				        Start(url);
+				        addedBlocs++;
+				        Console.WriteLine("[{0:hh:mm:ss}] Number of blocs proccesed:  {1}", DateTime.Now, addedBlocs);
+			        }
+		        }
+	        }
 //	        covarianceMatrix(null, null);
 //	        getArsoUrl("");
 
@@ -249,29 +277,6 @@ namespace lidar_orto_photo
 		    return p.X > maxX || p.Y > maxY;
 	    }
 
-	    public void NormalEstimation()
-	    {
-		    var normals = new List<Point3D>();//List<Vector3d> Normals = new List<Vector3d>();Form an empty list of normal vectors
-//		    Point3dList PCList = new Point3dList();
-		    //* PCList.AddRange(x);
-		    //* double Dev = MD;Define deviation as a double
-		    //* foreach (Point3d point in PCList) {For each point as Point3d in the point cloud
-		    //    * 		dynamic Neighbors = PCList.FindAll(V => V.DistanceTo(point) < D);find neighbors
-		    //;fit a plane to neighbors
-		    //Get the normal of this plane and put it out as the normal of the point
-		    //form a vector from the vantage point VP to point=VP-point and call it dir
-		    //    * 		plane NP = default(Plane);
-		    //    * 		Plane.FitPlaneToPoints(Neighbors, NP, Dev)
-		    //    * 		if (NP.Normal * (VP - point) > 0) { if this normal.dir>0 then
-		    //	    * 			Normals.Add(NP.Normal);Add the normal to the list of normals
-		    //	    * 		} else {
-		    //	    * 			Normals.Add(-NP.Normal);Add –normal to the list of normals
-		    //	    * 		}
-		    //    * }
-		    //* A = Normals;
-		    //* B = PCList.FindAll(VT => VT.DistanceTo(x(654)) < D); 
-	    }
-
 	    private static Bitmap GetOrthophotoImg()
 	    {
 		    double minX = _bottomLeftX;
@@ -303,92 +308,6 @@ namespace lidar_orto_photo
 		    return filename;
 	    }
 
-	    private static void Interpolation()
-	    {
-//		    public static nearest_nn = None          // # nearest neighbor (NN)
-//	    public static double distance_nn = 1000;//  # distance from NN to target
-// 
-//		public void nearest_neighbor_search(tree, target_point, hr, double distance, nearest=None, depth=0)://nearest=None, depth=0 ko kličemo
-//			""" Find the nearest neighbor for the given point (claims O(log(n)) complexity)
-//			:param tree         K-D tree
-//			:param target_point given point for the NN search
-//			:param hr           splitting hyperplane
-//			:param distance     minimal distance
-//			:param nearest      nearest point
-//			:param depth        tree's depth
-//			"""
-//		 
-//			global nearest_nn
-//			global distance_nn
-//		 
-//			if tree is None:
-//				return
-//		 
-//			k = len(target_point)
-//		 
-//			cur_node = tree.location         # current tree's node
-//			left_branch = tree.left_child    # its left branch
-//			right_branch = tree.right_child  # its right branch
-//		 
-//			nearer_kd = further_kd = None
-//			nearer_hr = further_hr = None
-//			left_hr = right_hr = None
-//		 
-//			# Select axis based on depth so that axis cycles through all valid values
-//			axis = depth % k
-//		 
-//			# split the hyperplane depending on the axis
-//			if axis == 0:
-//				left_hr = [hr[0], (cur_node[0], hr[1][1])]
-//				right_hr = [(cur_node[0],hr[0][1]), hr[1]]
-//		 
-//			if axis == 1:
-//				left_hr = [(hr[0][0], cur_node[1]), hr[1]]
-//				right_hr = [hr[0], (hr[1][0], cur_node[1])]
-//		 
-//			# check which hyperplane the target point belongs to
-//			if target_point[axis] <= cur_node[axis]:
-//				nearer_kd = left_branch
-//				further_kd = right_branch
-//				nearer_hr = left_hr
-//				further_hr = right_hr
-//		 
-//			if target_point[axis] > cur_node[axis]:
-//				nearer_kd = right_branch
-//				further_kd = left_branch
-//				nearer_hr = right_hr
-//				further_hr = left_hr
-//		 
-//			# check whether the current node is closer
-//			dist = (cur_node[0] - target_point[0])**2 + (cur_node[1] - target_point[1])**2
-//		 
-//			if dist < distance:
-//				nearest = cur_node
-//				distance = dist
-//		 
-//			# go deeper in the tree
-//			nearest_neighbor_search(nearer_kd, target_point, nearer_hr, distance, nearest, depth+1)
-//		 
-//			# once we reached the leaf node we check whether there are closer points
-//			# inside the hypersphere
-//			if distance < distance_nn:
-//				nearest_nn = nearest
-//				distance_nn = distance
-//		 
-//			# a nearer point (px,py) could only be in further_kd (further_hr) -> explore it
-//			px = compute_closest_coordinate(target_point[0], further_hr[0][0], further_hr[1][0])
-//			py = compute_closest_coordinate(target_point[1], further_hr[1][1], further_hr[0][1])
-//		 
-//			# check whether it is closer than the current nearest neighbor => whether a hypersphere crosses the hyperplane
-//			dist = (px - target_point[0])**2 + (py - target_point[1])**2
-//		 
-//			# explore the further kd-tree / hyperplane if necessary
-//			if dist < distance_nn:
-//				nearest_neighbor_search(further_kd, target_point, further_hr, distance, nearest, depth+1)
-		    
-		    
-	    }
-
 	    private static void covarianceMatrix(double[] point, KDTreeNodeCollection<KDTreeNode> neighbors)
 	    {
 		    Matrix3x3 C = new Matrix3x3();
@@ -403,8 +322,6 @@ namespace lidar_orto_photo
 			    
 
 		    }
-		    
-		    
 	    }
 
 	    private static string getArsoUrl(string searchTerm)
