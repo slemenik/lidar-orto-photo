@@ -14,3 +14,6 @@ C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\Aardvark.Base.xml
 C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\DevILSharp.pdb
 C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\FSharp.Core.xml
 C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\LASzip.xml
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\RestSharp.dll
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\System.ValueTuple.dll
+C:\Users\Matej\RiderProjects\lidar-orto-photo\bin\Debug\System.ValueTuple.xml

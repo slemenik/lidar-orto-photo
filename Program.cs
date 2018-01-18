@@ -1,8 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Web.UI.DataVisualization.Charting;
 using System.Windows.Forms;
 using Aardvark.Base;
 using laszip.net;
@@ -14,26 +19,25 @@ namespace lidar_orto_photo
 {
     internal class Program
     {
-	    private static readonly string ResourceDirectoryPath = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName + "\\resources\\";
-//	    private static readonly String temp_file_name = "GK_470_97.laz";	   
+	    private static readonly string ResourceDirectoryPath = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName + "\\resources\\";	   
         
 	    private static readonly string ARSO_LIDAR_URL = "http://gis.arso.gov.si/lidar/gkot/laz/b_35/D48GK/GK_470_97.laz";
-	    private static readonly string ARSO_ORTOPHOTO_URL = "http://gis.arso.gov.si/arcgis/rest/services/DOF_2016/MapServer/export";
-	    private static readonly int ORTO_PHOTO_IMG_SIZE = 2000;//TODO - change so it works with different sizes
+	    private const int OrtoPhotoImgSize = 2000;
 
-	    private static int bottomLeftX;
-	    private static int bottomLeftY;
+	    private static int _bottomLeftX;
+	    private static int _bottomLeftY;
 
 	    static void setParameters(string fileName)
 	    {
 
-		    bottomLeftX = Int32.Parse(fileName.Split('_')[1]) * 1000;
-		    bottomLeftY = Int32.Parse(fileName.Split('_')[2]) * 1000;
+		    Thread.CurrentThread.CurrentCulture = CultureInfo.CreateSpecificCulture("en-US");
+		    _bottomLeftX = Int32.Parse(fileName.Split('_')[1]) * 1000;
+		    _bottomLeftY = Int32.Parse(fileName.Split('_')[2]) * 1000;
 		    
 	    }
 	    
 	    
-		static void ReadLaz(string fileName, string imageName)
+		static void ReadLaz(string fileName)
 		{
 			var lazReader = new laszip_dll();
 			var lazWriter = new laszip_dll();
@@ -56,12 +60,9 @@ namespace lidar_orto_photo
 	
 				var classification = 0;
 				var coordArray = new double[3];
-				
-				
-				var img = new Bitmap(ResourceDirectoryPath + imageName, true);
-//				int[] pixels = buff.getData();
-//				int height = image.getHeight();
-//				int width = image.getWidth();
+
+				var img = getOrthophotoImg();
+//				var img = new Bitmap(ResourceDirectoryPath + imageName, true);
 
 	
 				lazWriter.header.number_of_point_records = numberOfPoints;
@@ -72,7 +73,7 @@ namespace lidar_orto_photo
 				err = lazWriter.laszip_open_writer(ResourceDirectoryPath + newFileName, true);
 				if (err == 0)
 				{
-					Console.Write("[{0:h:mm:ss}] Reading and writing points ...", DateTime.Now);
+					Console.Write("[{0:hh:mm:ss}] Reading and writing points ...", DateTime.Now);
 					for (var pointIndex = 0; pointIndex < numberOfPoints; pointIndex++)
 					{
 						lazReader.laszip_read_point();
@@ -83,22 +84,10 @@ namespace lidar_orto_photo
 
 						lazWriter.point = lazReader.point;
 						int[] pxCoordinates = findClosestPxCoordinates(coordArray[0], coordArray[1]);
-						int i = (pxCoordinates[0]-bottomLeftX)*2;
-						int j = img.Height-1-((pxCoordinates[1]-bottomLeftY)*2);//j index of image goes from top to bottom
-						
-//						var rnd = new Random();				
-//						var r = rnd.Next(0, 255);
-//						var g = rnd.Next(0, 255);
-//						var b = rnd.Next(0, 255);
-//						
-//						Console.WriteLine(pxCoordinates[0]);
-//						Console.WriteLine(i);
-						Color color = img.GetPixel(i,j); //binary int value
-//						Color color = new Color(rgb);
-//						Console.WriteLine("{0},{1},{2}", color.R, color.G, color.B);
-//						break;
-//						int[] rgbArray = new int[]{color.getRed(), color.getGreen(), color.getBlue()};
-						
+						int i = (pxCoordinates[0]-_bottomLeftX)*2;
+						int j = img.Height-1-((pxCoordinates[1]-_bottomLeftY)*2);//j index of image goes from top to bottom
+												
+						Color color = img.GetPixel(i,j); //binary int value						
 						lazWriter.point.rgb = new [] {(ushort) (color.R << 8), (ushort) (color.G << 8),(ushort) (color.B << 8), (ushort) 0};
 
 						var waveformPacket = lazReader.point.wave_packet;
@@ -106,7 +95,7 @@ namespace lidar_orto_photo
 						var xt = 123;
 						var yt = 2444;
 						var zt = 132122;
-////
+
 						waveformPacket[17] = (byte)(xt >> 24);
 						waveformPacket[18] = (byte)(xt >> 16);
 						waveformPacket[19] = (byte)(xt >> 8);
@@ -124,25 +113,7 @@ namespace lidar_orto_photo
 						
 						if (classification == 0)
 						{
-//							Console.WriteLine(lazReader.point.rgb[0]);
-//							Console.WriteLine(lazReader.point.rgb[1]);
-//							Console.WriteLine(lazReader.point.rgb[2]);
-//							Console.WriteLine(lazReader.point.rgb[3]);
 //							
-//							Console.WriteLine((int) lazReader.point.rgb[0] >> 8);
-//							Console.WriteLine((int) lazReader.point.rgb[1] >> 8);
-//							Console.WriteLine((int) lazReader.point.rgb[2] >> 8);
-//							Console.WriteLine((int) lazReader.point.rgb[3] >> 8);
-//							Console.WriteLine(lazReader.point.rgb[3]);
-							
-//							Console.WriteLine(lazReader.point.wave_packet);
-							var a = lazReader.point.wave_packet;
-//							for (int i = 0; i < a.Length; i++)
-//							{
-//								Console.Write(a[i] + "  ");
-//							}
-//							break;
-							classification++;
 						}
 //						
 						err = lazWriter.laszip_write_point();
@@ -168,7 +139,7 @@ namespace lidar_orto_photo
 
 	    private static void runLasview(string fileName)
 	    {
-		    Console.Write("[{0:h:mm:ss}] Opening lasview.exe...", DateTime.Now);
+		    Console.Write("[{0:hh:mm:ss}] Opening lasview.exe...", DateTime.Now);
 		    var start = new ProcessStartInfo
 		    {
 			    Arguments = "-i \"" + ResourceDirectoryPath + fileName + "\"",
@@ -183,7 +154,7 @@ namespace lidar_orto_photo
 
 	    private static void runLas2las(string fileName)
 	    {
-		    Console.Write("[{0:h:mm:ss}] Converting to LAS 1.3 ...", DateTime.Now);
+		    Console.Write("[{0:hh:mm:ss}] Converting to LAS 1.3 ...", DateTime.Now);
 		    var start = new ProcessStartInfo
 		    {
 			    Arguments = "-i \"" + ResourceDirectoryPath + fileName + "\" -set_point_type 5 -set_version 1.3 -olaz",
@@ -198,22 +169,22 @@ namespace lidar_orto_photo
 	    
         public static void Main()
         {
-	        Console.WriteLine("[{0:h:mm:ss}] Start program. ", DateTime.Now);
+	        Console.WriteLine("[{0:hh:mm:ss}] Start program. ", DateTime.Now);
 	        var fileName = "GK_470_97";
-	        var imageName = "export2.png";
-
 	        
 	        
 	        setParameters(fileName);
 ////	        runLas2las(fileName + ".laz");
-	        ReadLaz(fileName + "_1.laz", imageName);
-//	        runLasview(fileName + "_1_new.laz");
+	        ReadLaz(fileName + "_1.laz");
+	        runLasview(fileName + "_1_new.laz");
 //	        var a = isPointOutOfBounds(new Point(470000.0, 97000.0), 470000, 97000);
 //	        Console.WriteLine(bottomLeftX);
 //	        Console.WriteLine(bottomLeftY);
 //	        Button1_Click(imageName);
+//	        Bitmap v = getOrthophotoImg();
+//	        v.Save(ResourceDirectoryPath + "kek.png");
 	        
-	        Console.WriteLine("[{0:h:mm:ss}] End program.", DateTime.Now);
+	        Console.WriteLine("[{0:hh:mm:ss}] End program.", DateTime.Now);
         }//end main
 	    
 	    private static int[] findClosestPxCoordinates(double x, double y){
@@ -251,10 +222,52 @@ namespace lidar_orto_photo
 	    private static bool isPointOutOfBounds(Point p)
 	    {
 		    
-		    double maxX = bottomLeftX + (ORTO_PHOTO_IMG_SIZE-1);
-		    double maxY = bottomLeftY + (ORTO_PHOTO_IMG_SIZE-1);
+		    double maxX = _bottomLeftX + (OrtoPhotoImgSize-1);
+		    double maxY = _bottomLeftY + (OrtoPhotoImgSize-1);
 
 		    return p.X > maxX || p.Y > maxY;
+	    }
+
+	    public void normalEstimation()
+	    {
+		    List<Point3D> normals = new List<Point3D>();//List<Vector3d> Normals = new List<Vector3d>();Form an empty list of normal vectors
+		    //* Point3dList PCList = new Point3dList();
+		    //* PCList.AddRange(x);
+		    //* double Dev = MD;Define deviation as a double
+		    //* foreach (Point3d point in PCList) {For each point as Point3d in the point cloud
+		    //    * 		dynamic Neighbors = PCList.FindAll(V => V.DistanceTo(point) < D);find neighbors
+		    //;fit a plane to neighbors
+		    //Get the normal of this plane and put it out as the normal of the point
+		    //form a vector from the vantage point VP to point=VP-point and call it dir
+		    //    * 		plane NP = default(Plane);
+		    //    * 		Plane.FitPlaneToPoints(Neighbors, NP, Dev)
+		    //    * 		if (NP.Normal * (VP - point) > 0) { if this normal.dir>0 then
+		    //	    * 			Normals.Add(NP.Normal);Add the normal to the list of normals
+		    //	    * 		} else {
+		    //	    * 			Normals.Add(-NP.Normal);Add –normal to the list of normals
+		    //	    * 		}
+		    //    * }
+		    //* A = Normals;
+		    //* B = PCList.FindAll(VT => VT.DistanceTo(x(654)) < D); 
+	    }
+
+	    private static Bitmap getOrthophotoImg()
+	    {
+		    double minX = _bottomLeftX;
+		    double minY = _bottomLeftY;
+		    double maxX = minX + 999.999999999;
+		    double maxY = minY + 999.999999999;
+		    
+			Console.Write("[{0:hh:mm:ss}] Downloading image...", DateTime.Now);
+		    WebRequest request = WebRequest.Create("http://gis.arso.gov.si/arcgis/rest/services/DOF_2016/MapServer/export" +
+		                                           $"?bbox={minX}%2C{minY}%2C{maxX}%2C{maxY}&bboxSR=&layers=&layerDefs=" +
+		                                           $"&size={OrtoPhotoImgSize}%2C{OrtoPhotoImgSize}&imageSR=&format=png" +
+		                                           $"&transparent=false&dpi=&time=&layerTimeOptions=" +
+		                                           "&dynamicLayers=&gdbVersion=&mapScale=&f=image");
+		    WebResponse response = request.GetResponse();
+		    Stream responseStream = response.GetResponseStream();
+		    Console.WriteLine("[DONE]");
+		    return new Bitmap(responseStream);
 	    }
 	    
     } //end class
