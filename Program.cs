@@ -1,17 +1,19 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Net;
-using System.Runtime.Remoting.Messaging;
+ using System.Runtime.InteropServices;
+ using System.Runtime.Remoting.Messaging;
 using System.Threading;
 using System.Web.UI.DataVisualization.Charting;
 using Accord.Collections;
 using Accord.IO;
 using Accord.Math;
-using laszip.net;
+ using Accord.Math.Decompositions;
+ using laszip.net;
 using RestSharp;
 using RestSharp.Deserializers;
 using Point = System.Windows.Point;
@@ -22,86 +24,59 @@ namespace lidar_orto_photo
 	internal class Program
     {
 	    private static readonly string ResourceDirectoryPath = Directory.GetParent(Directory.GetCurrentDirectory()).Parent?.FullName + "\\resources\\";	   
-        
-//	    private static readonly string ArsoLidarUrl = "http://gis.arso.gov.si/lidar/gkot/laz/b_35/D48GK/GK_459_100.laz";
-//	    private static readonly string ArsoLidarUrl = "http://gis.arso.gov.si/lidar/gkot/laz/b_35/D48GK/GK_470_97.laz";
-//	    private static readonly string ArsoLidarUrl = "http://gis.arso.gov.si/lidar/gkot/laz/b_35/D48GK/GK_462_104.laz";
-
-	    private static readonly int[] SlovenianMapBounds = {374,  30,  624,  194}; //minx,miny,maxx,maxy in thousand
-
-//	    public  object sa = SlovenianMapBounds.MinX;
+	    private static readonly int[] SlovenianMapBounds = {374,  30,  624,  194}; //minx,miny,maxx,maxy in thousand, manualy set based on ARSO website
 	    private const int OrtoPhotoImgSize = 2000;
+	    private static bool IncludeNormals = false;
 
 	    private static int _bottomLeftX;
 	    private static int _bottomLeftY;
+	    private static int _addedBlocs;
 
-	    private static laszip_dll lazWriter;
-
-	    private static void SetParameters(string fileName)
-	    {
-
+	    //sets global parameters
+	    //param example: "gis.arso.gov.si/lidar/gkot/laz/b_35/D48GK/GK_462_104.laz"
+	    private static void SetParameters(string url)
+	    {		
 		    Thread.CurrentThread.CurrentCulture = CultureInfo.CreateSpecificCulture("en-US");
+		    var fileName = Path.GetFileNameWithoutExtension(url);
 		    _bottomLeftX = int.Parse(fileName.Split('_')[1]) * 1000;
 		    _bottomLeftY = int.Parse(fileName.Split('_')[2]) * 1000;
-		    
 	    }
 
-
-	    private static void ReadWriteLaz(string fileName)
+		//reads LAZ, builds KD tree, reads LAZ again and sets color & normal and writes
+	    private static void ReadWriteLaz()
 		{
-			var lazReader = new laszip_dll();
+			var lazReader = new laszip_dll();		
+			var compressed = true;		
+			var filePath = ResourceDirectoryPath + "laz13.laz";
 			
-			var compressed = true;
-			
-			var filePath = ResourceDirectoryPath + fileName;
 			lazReader.laszip_open_reader(filePath, ref compressed);
 			var numberOfPoints = lazReader.header.number_of_point_records;
-
-			var classification = 0;
 			var coordArray = new double[3];
+			var kdTree = new KDTree(3);
+			if (IncludeNormals)
+			{								
+				Console.Write("[{0:hh:mm:ss}] Reading LAZ and building KD tree...", DateTime.Now);
+				for (var pointIndex = 0; pointIndex < numberOfPoints; pointIndex++)
+				{
+					lazReader.laszip_read_point();
+					lazReader.laszip_get_coordinates(coordArray);
 
+					kdTree.Add(coordArray);
+				}
+				Console.WriteLine("[DONE] ");
+			}		
 			var img = GetOrthophotoImg();
-//				var img = new Bitmap(ResourceDirectoryPath + imageName, true);
-
-			lazReader.header.number_of_point_records = numberOfPoints;
-//			Console.WriteLine(numberOfPoints);
-			
-			var pointsCoordArr = new double[numberOfPoints,3];
-			KDTree kdTree = new KDTree(3);
-			
-			
-			
-			Console.Write("[{0:hh:mm:ss}] Reading LAZ ...", DateTime.Now);
+		
+			Console.Write("[{0:hh:mm:ss}] Reading and writing LAZ...", DateTime.Now);
+			lazReader.laszip_seek_point(0L);//read from the beginning again
+			lazReader.laszip_open_reader(filePath, ref compressed);
+		
+			var lazWriter = new laszip_dll();              
+			lazWriter.header = lazReader.header;
+			lazWriter.laszip_open_writer(ResourceDirectoryPath + "SloveniaLidarRGB" +_addedBlocs + ".laz", true);
+					
 			for (var pointIndex = 0; pointIndex < numberOfPoints; pointIndex++)
 			{
-				lazReader.laszip_read_point();
-				lazReader.laszip_get_coordinates(coordArray);			
-				
-				pointsCoordArr[pointIndex,0] = coordArray[0];
-				pointsCoordArr[pointIndex,1] = coordArray[1];
-				pointsCoordArr[pointIndex,2] = coordArray[2];
-				
-				kdTree.Add(new []{coordArray[0], coordArray[1],coordArray[2]});
-				
-			}
-//			Console.Write(kdTree.Count);
-			Console.Write("[DONE] \n[{0:hh:mm:ss}] Writing LAZ...", DateTime.Now);
-//			HashSet<int> set = new HashSet<int>();
-			lazReader.laszip_seek_point(0L);//read from the beginning
-			lazReader.laszip_open_reader(filePath, ref compressed);
-
-			if (lazWriter == null)
-			{
-				lazWriter = new laszip_dll();
-				lazWriter.header = lazReader.header;
-//				var newFileName = Path.GetFileNameWithoutExtension(fileName) + "_new.laz";
-				lazWriter.laszip_open_writer(ResourceDirectoryPath + "SloveniaLidarRGB.laz", true);
-			}
-			 
-			
-			for (int pointIndex = 0; pointIndex < numberOfPoints; pointIndex = pointIndex + 1)
-			{
-				
 				lazReader.laszip_read_point();
 				lazReader.laszip_get_coordinates(coordArray);
 				lazWriter.point = lazReader.point;
@@ -118,57 +93,47 @@ namespace lidar_orto_photo
 					(ushort) 0
 				};
 
+				if (IncludeNormals)
+				{
+					var kNeighbours = kdTree.ApproximateNearest(coordArray, 20, 1000);
+					var normal = GetNormal(coordArray, kNeighbours);
+								
+					var xt = (float) normal[0];//xt in LAS is float
+					var yt = (float) normal[1];
+					var zt = (float) normal[2];
 
-//				var nearest = kdTree.ApproximateNearest(coordArray, 10, kdTree.Count);
-//				if (nearest.Count > 1)
-//				{
-////					Console.WriteLine(nearest[0].Node.Position[0]);
-////					Console.WriteLine(nearest[0].Node.Position[1]);
-////					Console.WriteLine(nearest[0].Node.Position[2]);
-////					set.Add(nearest.Count);
-////					Console.WriteLine(coordArray[0]);
-////					Console.WriteLine(coordArray[1]);
-////					Console.WriteLine(coordArray[2]);
-//					Console.WriteLine(nearest.Count);
-//				}
-				
-				
-				var waveformPacket = lazWriter.point.wave_packet;
-				var xt = 123;
-				var yt = 2444;
-				var zt = 132122;
+					var xtBytes = BitConverter.GetBytes(xt);
+					var ytBytes = BitConverter.GetBytes(yt);
+					var ztBytes = BitConverter.GetBytes(zt);
 
-				waveformPacket[17] = (byte)(xt >> 24);
-				waveformPacket[18] = (byte)(xt >> 16);
-				waveformPacket[19] = (byte)(xt >> 8);
-				waveformPacket[20] = (byte) xt;
+					var waveformPacket = lazWriter.point.wave_packet;
+					waveformPacket[17] = xtBytes[0];
+					waveformPacket[18] = xtBytes[1];
+					waveformPacket[19] = xtBytes[2];
+					waveformPacket[20] = xtBytes[3];
 				
-				waveformPacket[21] = (byte)(yt >> 24);
-				waveformPacket[22] = (byte)(yt >> 16);
-				waveformPacket[23] = (byte)(yt >> 8);
-				waveformPacket[24] = (byte) yt;
+					waveformPacket[21] = ytBytes[0];
+					waveformPacket[22] = ytBytes[1];
+					waveformPacket[23] = ytBytes[2];
+					waveformPacket[24] = ytBytes[3];
 				
-				waveformPacket[25] = (byte)(zt >> 24);
-				waveformPacket[26] = (byte)(zt >> 16);
-				waveformPacket[27] = (byte)(zt >> 8);
-				waveformPacket[28] = (byte) zt;
-				
-//				if (classification == 0)
-//				{
-////							break;
-//				}
-//						
+					waveformPacket[25] = ztBytes[0];
+					waveformPacket[26] = ztBytes[1];
+					waveformPacket[27] = ztBytes[2];
+					waveformPacket[28] = ztBytes[3];
+				}
 				lazWriter.laszip_write_point();
 			}
-//			Console.WriteLine(set.Count);
 			lazReader.laszip_close_reader();
-//			lazWriter.laszip_close_writer();
+			lazWriter.laszip_close_writer();
 						
 			Console.WriteLine("[DONE]");		
-		}//end function
+		}//end readwrite function
 
 		
 
+	    //simple visualtisation with lasview.exe
+	    //param example: "laz13.laz"
 	    private static void RunLasview(string fileName)
 	    {
 		    Console.Write("[{0:hh:mm:ss}] Opening lasview.exe...", DateTime.Now);
@@ -184,59 +149,58 @@ namespace lidar_orto_photo
 		    Console.WriteLine("[DONE]");
 	    }
 
-	    private static void RunLas2Las(string fileName)
+	    //trasnform from LAS 1.2 to 1.3, save new file to folder
+	    private static void RunLas2Las()
 	    {
 		    Console.Write("[{0:hh:mm:ss}] Converting to LAS 1.3 ...", DateTime.Now);
 		    var start = new ProcessStartInfo
 		    {
-			    Arguments = "-i \"" + ResourceDirectoryPath + fileName + "\" -set_point_type 5 -set_version 1.3 -olaz",
+			    Arguments = "-i \"" + ResourceDirectoryPath + 
+			              "laz12.laz\" -set_point_type 5 -set_version 1.3 -o \""+ ResourceDirectoryPath + "laz13.laz\"",
 			    FileName = ResourceDirectoryPath + "las2las",
 			    WindowStyle = ProcessWindowStyle.Hidden,
 			    CreateNoWindow = false
 		    };
+
 		    var process = Process.Start(start);
 		    process?.WaitForExit();
 		    Console.WriteLine("[DONE]");
 	    }
 
+	    //param example: "gis.arso.gov.si/lidar/gkot/laz/b_35/D48GK/GK_462_104.laz"
 	    private static void Start(string lidarUrl)
 	    {
-//		    var fileName = "GK_459_100";
-	        var fileName = DownloadLaz(lidarUrl);
-	        SetParameters(fileName);
-	        RunLas2Las(fileName + ".laz");
-	        ReadWriteLaz(fileName + "_1.laz");
-//	        RunLasview(fileName + "_1_new.laz");
-
+	        DownloadLaz(lidarUrl);
+	        SetParameters(lidarUrl);
+	        RunLas2Las();
+	        ReadWriteLaz();
+//	        RunLasview(fileName + ".laz");
 	    }
 	    
         public static void Main()
         {
-	        Console.WriteLine("[{0:hh:mm:ss}] Start program. ", DateTime.Now);
-	        
+	        Console.WriteLine("[{0:hh:mm:ss}] Start program. ", DateTime.Now);        
 	        Console.WriteLine("[{0:hh:mm:ss}] Searching for valid ARSO Urls...", DateTime.Now);
 
-	        var addedBlocs = 0;
+	        _addedBlocs = 0;
 	        for (var x = SlovenianMapBounds[0]; x <= SlovenianMapBounds[2]; x++)
 	        {
 		        for (var y = SlovenianMapBounds[1]; y <= SlovenianMapBounds[3]; y++)
 		        {
-			        var url = getArsoUrl(x + "_" + y);
+			        var url = GetArsoUrl(x + "_" + y);
 			        if (url != null)
 			        {
 				        Console.WriteLine("[{0:hh:mm:ss}] Found URL: {1}", DateTime.Now, url);
 				        Start(url);
-				        addedBlocs++;
-				        Console.WriteLine("[{0:hh:mm:ss}] Number of blocs proccesed:  {1}", DateTime.Now, addedBlocs);
+				        _addedBlocs++;
+				        Console.WriteLine("[{0:hh:mm:ss}] Number of blocs proccesed:  {1}\n", DateTime.Now, _addedBlocs);
 			        }
 		        }
-	        }
-//	        covarianceMatrix(null, null);
-//	        getArsoUrl("");
-
+	        }        
 	        Console.WriteLine("[{0:hh:mm:ss}] End program.", DateTime.Now);
         }//end main
 	    
+	    //nearest neighbour interpolation
 	    private static int[] FindClosestPxCoordinates(double x, double y){
 
 		    var decimalPartX = x - Math.Floor(x);
@@ -269,6 +233,7 @@ namespace lidar_orto_photo
 		    return new []{(int)closestPoint.X, (int)closestPoint.Y};
 	    }
 	    
+	    //p is out of bounds if x or y coordinate is bigger than width of length of image 
 	    private static bool IsPointOutOfBounds(Point p)
 	    {
 		    double maxX = _bottomLeftX + (OrtoPhotoImgSize-1);
@@ -277,6 +242,7 @@ namespace lidar_orto_photo
 		    return p.X > maxX || p.Y > maxY;
 	    }
 
+	    //download and return Image created based on bounds -> _bottomLeftX, _bottomLeftY
 	    private static Bitmap GetOrthophotoImg()
 	    {
 		    double minX = _bottomLeftX;
@@ -296,56 +262,70 @@ namespace lidar_orto_photo
 		    return new Bitmap(responseStream ?? throw new Exception());
 	    }
 
-	    private static string DownloadLaz(string lidarUrl)
+	    //download LAZ file, based on valid URL
+	    //param example: "gis.arso.gov.si/lidar/gkot/laz/b_35/D48GK/GK_462_104.laz"
+	    private static void DownloadLaz(string lidarUrl)
 	    {
-		    Uri uri = new Uri(lidarUrl);
-			string filename = Path.GetFileNameWithoutExtension(uri.LocalPath);
-		    
+		    Uri uri = new Uri(lidarUrl);		    
 		    Console.Write("[{0:hh:mm:ss}] Downloading Laz from ARSO...", DateTime.Now);
 		    WebClient client = new WebClient ();
-		    client.DownloadFile(uri, ResourceDirectoryPath + filename + ".laz");
+		    client.DownloadFile(uri, ResourceDirectoryPath + "laz12.laz");
 		    Console.WriteLine("[DONE]");
-		    return filename;
 	    }
 
-	    private static void covarianceMatrix(double[] point, KDTreeNodeCollection<KDTreeNode> neighbors)
+	    //returns normal of the point, based on the neighbours in KDtree
+	    private static double[] GetNormal(double[] point, KDTreeNodeCollection<KDTreeNode> neighbors)
 	    {
-		    Matrix3x3 C = new Matrix3x3();
-		    Console.WriteLine(C.V00);
-			Vector3 p = new Vector3((float) point[0], (float) point[1], (float) point[2]);
-//		    var iterator = neighbors;
-
+		    var covarianceMatrix = Matrix.Create(3, 3, 0.0);
 		    foreach (var node in neighbors)
 		    {
-			    Vector3 pi = new Vector3((float) node.Node.Position[0], (float) node.Node.Position[1],(float) node.Node.Position[2]);
-			    Vector3 matrix = pi - p;
-			    
+			    var piX = node.Node.Position[0];
+			    var piY = node.Node.Position[1];
+			    var piZ = node.Node.Position[2];
 
-		    }
+			    var matrix = Matrix.Create(new[]{new []{piX-point[0]}, new[]{piY-point[1]}, new[] {piZ-point[2]}});
+			 	var currC = matrix.DotWithTransposed(matrix);			    
+			    covarianceMatrix = currC.Add(covarianceMatrix);
+		    }		    
+		    var decomposition = new EigenvalueDecomposition(covarianceMatrix,true, true,true);//already sorted - descending order
+
+			var normalX = decomposition.Eigenvectors[0,2];
+		    var normalY = decomposition.Eigenvectors[1,2];
+		    var normalZ = decomposition.Eigenvectors[2,2];
+
+		    return new []{normalX, normalY,normalZ};
 	    }
 
-	    private static string getArsoUrl(string searchTerm)
+	    //we use ARSO search bar functionality to find valid URLs, based on brute-forced search terms 
+	    // param: example: "470_12"
+	    private static string GetArsoUrl(string searchTerm)
 	    {
-		    var client = new RestClient("http://gis.arso.gov.si");
-		    var request = new RestRequest("evode/WebServices/NSearchWebService.asmx/GetFilterListItems", Method.POST);
+		    try
+		    {
+			    var client = new RestClient("http://gis.arso.gov.si");
+			    var request = new RestRequest("evode/WebServices/NSearchWebService.asmx/GetFilterListItems", Method.POST);
 		   
-			request.AddParameter("aplication/json", "{\"configID\":\"lidar_D48GK\",\"culture\":\"sl-SI\",\"groupID\":" +
-			   	"\"grouplidar48GK\"," + "\"parentID\":-1,\"filter\":\""+searchTerm+"\",\"lids\":null,\"sortID\":null}",
+			    request.AddParameter("aplication/json", "{\"configID\":\"lidar_D48GK\",\"culture\":\"sl-SI\",\"groupID\":" +
+			                                            "\"grouplidar48GK\"," + "\"parentID\":-1,\"filter\":\""+searchTerm+"\",\"lids\":null,\"sortID\":null}",
 				ParameterType.RequestBody);
 
-		    request.AddHeader("Content-Type", "application/json; charset=utf-8");
-		    JsonDeserializer deserial = new JsonDeserializer();
+			    request.AddHeader("Content-Type", "application/json; charset=utf-8");
+			    JsonDeserializer deserial = new JsonDeserializer();
 		    
-		    IRestResponse response = client.Execute(request);
-		    var json = deserial.Deserialize<Dictionary<string, Dictionary<string, string>>>(response);
-		    if (json["d"]["Count"] == "0")
-		    {
-			    return null;
+			    IRestResponse response = client.Execute(request);
+			    var json = deserial.Deserialize<Dictionary<string, Dictionary<string, string>>>(response);
+			    if (json["d"]["Count"] == "0")
+			    {
+				    return null;//search term doesn't exist
+			    }
+			    var blok = json["d"]["Items"].Split(' ')[2];
+			    return "http://gis.arso.gov.si/lidar/gkot/laz/"+ blok + "/D48GK/GK_"+ searchTerm +".laz";
+
 		    }
-		    var blok = json["d"]["Items"].Split(' ')[2];
-		    return "http://gis.arso.gov.si/lidar/gkot/laz/"+ blok + "/D48GK/GK_"+ searchTerm +".laz";
-
+		    catch (Exception e)
+		    {
+			    return null;//probably network error
+		    }
 	    }
-
     } //end class
 }
